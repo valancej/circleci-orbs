@@ -1,0 +1,10 @@
+version: 2.1
+
+orbs:
+  anchore: anchore/anchore-engine@dev:0.1.0
+
+workflows:
+  scan_image:
+    jobs:
+      - anchore/image_scan:
+          image_name: "alpine:latest"
