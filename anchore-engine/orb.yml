@@ -1,0 +1,140 @@
+version: 2.1
+description: anchore engine container security scanning
+
+executors:
+  anchore_engine:
+    description: |
+      The anchore-engine image, useful for stateless image scanning.
+      Image includes anchore-cli for interacting with the engine.
+      Inclues postgresql image preloaded with anchore vulnerability data.
+    parameters:
+      version:
+        type: string
+        default: "latest"
+    environment:
+      ANCHORE_CLI_USER: "admin"
+      ANCHORE_CLI_PASS: "foobar"
+      ANCHORE_CLI_SSL_VERIFY: "n"
+    docker:
+      - image: anchore/anchore-engine:<< parameters.version >>
+        entrypoint: ""
+      - image: anchore/engine-db-preload:<< parameters.version >>
+        name: anchore-db
+
+commands:
+  install_ci_tools:
+    description: |
+      Downloads anchore_ci_tools.py and create symbolic link.
+      Must be used on executor with anchore-cli installed.
+    steps:
+      - run:
+          name: Install anchore_ci_tools.py
+          command: |
+            curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py
+            chmod +x /tmp/anchore_ci_tools.py
+            ln -s /tmp/anchore_ci_tools.py /usr/local/bin/anchore_ci_tools
+
+  add_registry:
+    description: |
+      Used for adding a private registry to anchore engine.
+      All parameters are required if using this command.
+      Must run on executor with anchore-cli installed.
+    parameters:
+      registry_name:
+        description: Name of private registry.
+        type: string
+      registry_user:
+        description: Username for private registry (use env var to populate).
+        type: string
+      registry_pass:
+        description: Password for private registry (use env var to populate).
+        type: string
+    steps:
+      - run:
+          name: Add private registry to anchore engine.
+          command: anchore-cli registry add << parameters.registry_name >> << parameters.registry_user >> << parameters.registry_pass >> --skip-validate
+
+  analyze_image:
+    description: |
+      Add image to anchore engine and start analyzing.
+      image_name is required, timeout is optional.
+      Must run on executor with anchore_ci_tools.py installed.
+    parameters:
+      image_name:
+        type: string
+        description: Image repository & tag.
+      timeout:
+        type: string
+        default: "300"
+        description: Timeout used for Anchore Engine image scanning.
+    steps:
+      - run:
+          name: Analyze image with anchore engine.
+          command: anchore_ci_tools --analyze --report --image << paramenters.image_name >> --timeout << parameters.timeout >>
+
+  generate_reports:
+    description: |
+      Creates reports from anchore engine image scan output.
+      image_name is required.
+      Must run on exectutor with anchore_ci_tools.py installed.
+    parameters:
+      image_name:
+        type: string
+        description: Image repository & tag.
+    steps:
+      - run:
+          name: Generate anchore image scan reports.
+          command: anchore_ci_tools --report --image << parameters.image_name >>
+
+  setup_engine:
+    description: |
+      Sets up & starts anchore engine on the anchore/anchore-engine container.
+      Must be run on executor with anchore_ci_tools.py installed.
+    steps:
+      - run:
+          name: Setup anchore engine.
+          command: anchore_ci_tools --setup
+jobs:
+  image_scan:
+    executor:
+      name: anchore_engine
+      version: "2.4"
+    description: |
+      Performs a static security analysis of docker container with Anchore Engine.
+      Requires registry credentials to access private images.
+    parameters:
+      private_registry:
+        description: Set to True if image is only accessible from a private registry.
+        default: False
+        type: boolean
+      registry_name:
+        description: Name of private registry (eg - docker.io)
+        type: string
+      registry_user:
+        description: Username for private registry (use env var to populate).
+        type: string
+      registry_pass:
+        description: Password for private registry (use env var to populate).
+        type: string
+      image_name:
+        type: string
+        description: Image repository & tag.
+      timeout:
+        type: string
+        default: "300"
+        description: Timeout used for Anchore Engine image scanning.
+    steps:
+      - install_ci_tools
+      - setup_engine
+      - when:
+          condition: << parameters.private_registry >>
+          steps:
+            - add_registry:
+                registry_name: << parameters.registry_name >>
+                registry_user: << parameters.registry_user >>
+                registry_pass: << parameters.registry_pass >>
+      - analyze_image:
+          image_name: << parameters.image_name >>
+          timeout: << parameters.timeout >>
+      - generate_reports:
+          image_name: << parameters.image_name >>
