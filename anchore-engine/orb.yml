@@ -8,7 +8,7 @@ executors:
       Image includes anchore-cli for interacting with the engine.
       Inclues postgresql image preloaded with anchore vulnerability data.
     parameters:
-      version:
+      tag:
         type: string
         default: "latest"
     environment:
@@ -16,9 +16,9 @@ executors:
       ANCHORE_CLI_PASS: "foobar"
       ANCHORE_CLI_SSL_VERIFY: "n"
     docker:
-      - image: anchore/anchore-engine:<< parameters.version >>
+      - image: anchore/anchore-engine:<< parameters.tag >>
         entrypoint: ""
-      - image: anchore/engine-db-preload:<< parameters.version >>
+      - image: anchore/engine-db-preload:<< parameters.tag >>
         name: anchore-db
 
 commands:
@@ -101,7 +101,7 @@ jobs:
   image_scan:
     executor:
       name: anchore_engine
-      version: "2.4"
+      tag: "v0.2.4"
     description: |
       Performs a static security analysis of docker container with Anchore Engine.
       Requires registry credentials to access private images.
