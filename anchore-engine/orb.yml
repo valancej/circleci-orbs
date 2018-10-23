@@ -43,12 +43,15 @@ commands:
       registry_name:
         description: Name of private registry.
         type: string
+        default: "docker.io"
       registry_user:
         description: Username for private registry (use env var to populate).
         type: string
+        default: "dockerhub_user"
       registry_pass:
         description: Password for private registry (use env var to populate).
         type: string
+        default: "mysecretpassword"
     steps:
       - run:
           name: Add private registry to anchore engine.
@@ -110,12 +113,15 @@ jobs:
       registry_name:
         description: Name of private registry (eg - docker.io)
         type: string
+        default: "docker.io"
       registry_user:
         description: Username for private registry (use env var to populate).
         type: string
+        default: "dockerhub_username"
       registry_pass:
         description: Password for private registry (use env var to populate).
         type: string
+        default: "mysecretpassword"
       image_name:
         type: string
         description: Image repository & tag.
