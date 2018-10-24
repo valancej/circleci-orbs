@@ -72,12 +72,15 @@ commands:
             chmod +x /tmp/anchore_ci_tools.py
             ln -s /tmp/anchore_ci_tools.py /usr/local/bin/anchore_ci_tools
 
-  add_private_registry:
+  analyze_private_image:
     description: |
       Used for adding a private registry to anchore engine.
       All parameters are required if using this command.
       Must run on executor with anchore-cli installed.
     parameters:
+      image_name:
+        type: string
+        description: Image repository & tag.
       registry_name:
         description: Name of private registry.
         type: string
@@ -90,12 +93,17 @@ commands:
         description: Password for private registry (use env var to populate).
         type: string
         default: "mysecretpassword"
+      timeout:
+        type: string
+        default: "300"
+        description: Timeout used for Anchore Engine image scanning.
     steps:
       - run:
           name: Add private registry to anchore engine.
           command: |
-            anchore_ci_tools --wait
+            anchore_ci_tools --setup
             anchore-cli registry add << parameters.registry_name >> << parameters.registry_user >> << parameters.registry_pass >> --skip-validate
+            anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
 
   analyze_image:
     description: |
@@ -114,17 +122,8 @@ commands:
       - run:
           name: Analyze image with anchore engine.
           command: |
-            anchore_ci_tools --wait
+            anchore_ci_tools --setup
             anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
-
-  setup_engine:
-    description: |
-      Sets up & starts anchore engine on the anchore/anchore-engine container.
-      Must be run on executor with anchore_ci_tools.py installed.
-    steps:
-      - run:
-          name: Setup anchore engine.
-          command: anchore_ci_tools --setup &
 
 jobs:
   image_scan:
@@ -159,17 +158,20 @@ jobs:
         description: Timeout used for Anchore Engine image scanning.
     steps:
       - install_ci_tools
-      - setup_engine
       - when:
           condition: << parameters.private_registry >>
           steps:
-            - add_private_registry:
+            - analyze_private_image:
+                image_name: << parameters.image_name >>
                 registry_name: << parameters.registry_name >>
                 registry_user: << parameters.registry_user >>
                 registry_pass: << parameters.registry_pass >>
-      - analyze_image:
-          image_name: << parameters.image_name >>
-          timeout: << parameters.timeout >>
+      - unless:
+          condition: << parameters.private_registry >>
+          steps:
+            - analyze_image:
+                image_name: << parameters.image_name >>
+                timeout: << parameters.timeout >>
       - store_artifacts:
           path: anchore-reports
 
@@ -188,7 +190,6 @@ jobs:
         description: Timeout used for Anchore Engine image scanning.
     steps:
       - install_ci_tools
-      - setup_engine
       - push_local_image:
           image_name: << parameters.image_name >>
       - analyze_image:
