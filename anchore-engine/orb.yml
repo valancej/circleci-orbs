@@ -21,10 +21,10 @@ executors:
       - image: anchore/engine-cli:latest
       - image: anchore/anchore-engine:<< parameters.tag >>
         entrypoint: |
-          curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py
-          chmod +x /tmp/anchore_ci_tools.py
-          ln -s /tmp/anchore_ci_tools.py /usr/local/bin/anchore_ci_tools
-          anchore_ci_tools --setup
+          curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py;
+          chmod +x /tmp/anchore_ci_tools.py;
+          ln -s /tmp/anchore_ci_tools.py /usr/local/bin/anchore_ci_tools;
+          anchore_ci_tools --setup;
         name: anchore-engine
       - image: anchore/engine-db-preload:<< parameters.tag >>
         name: anchore-db
@@ -76,6 +76,7 @@ commands:
       - run:
           name: Install anchore_ci_tools.py
           command: |
+            apk add curl
             curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py
             chmod +x /tmp/anchore_ci_tools.py
             ln -s /tmp/anchore_ci_tools.py /usr/local/bin/anchore_ci_tools
