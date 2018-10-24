@@ -73,7 +73,9 @@ commands:
     steps:
       - run:
           name: Analyze image with anchore engine.
-          command: anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
+          command: |
+            anchore_ci_tools --setup
+            anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
 
   generate_reports:
     description: |
@@ -131,7 +133,6 @@ jobs:
         description: Timeout used for Anchore Engine image scanning.
     steps:
       - install_ci_tools
-      - setup_engine
       - when:
           condition: << parameters.private_registry >>
           steps:
