@@ -122,7 +122,7 @@ commands:
     steps:
       - run:
           name: Setup anchore engine.
-          command: exec anchore_ci_tools --setup
+          command: anchore_ci_tools --setup
 
 jobs:
   image_scan:
@@ -157,6 +157,7 @@ jobs:
         description: Timeout used for Anchore Engine image scanning.
     steps:
       - install_ci_tools
+      - setup_engine
       - when:
           condition: << parameters.private_registry >>
           steps:
@@ -185,6 +186,7 @@ jobs:
         description: Timeout used for Anchore Engine image scanning.
     steps:
       - install_ci_tools
+      - setup_engine
       - push_local_image:
           image_name: << parameters.image_name >>
       - analyze_image:
