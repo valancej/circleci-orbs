@@ -74,9 +74,9 @@ commands:
 
   analyze_private_image:
     description: |
-      Used for adding a private registry to anchore engine.
+      Used for analyzing image in a private registry.
       All parameters are required if using this command.
-      Must run on executor with anchore-cli installed.
+      Must run on executor with anchore-engine installed.
     parameters:
       image_name:
         type: string
@@ -99,7 +99,7 @@ commands:
         description: Timeout used for Anchore Engine image scanning.
     steps:
       - run:
-          name: Add private registry to anchore engine.
+          name: Scan private image with anchore engine.
           command: |
             anchore_ci_tools --setup
             anchore-cli registry add << parameters.registry_name >> << parameters.registry_user >> << parameters.registry_pass >> --skip-validate
