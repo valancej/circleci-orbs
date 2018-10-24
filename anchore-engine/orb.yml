@@ -15,9 +15,17 @@ executors:
       ANCHORE_CLI_USER: "admin"
       ANCHORE_CLI_PASS: "foobar"
       ANCHORE_CLI_SSL_VERIFY: "n"
+      ANCHORE_ENDPOINT_HOSTNAME: "anchore-engine"
+      ANCHORE_HOST_ID: "localhost"
     docker:
+      - image: anchore/engine-cli:latest
       - image: anchore/anchore-engine:<< parameters.tag >>
-        entrypoint: ""
+        entrypoint: |
+          curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py
+          chmod +x /tmp/anchore_ci_tools.py
+          ln -s /tmp/anchore_ci_tools.py /usr/local/bin/anchore_ci_tools
+          anchore_ci_tools --setup
+        name: anchore-engine
       - image: anchore/engine-db-preload:<< parameters.tag >>
         name: anchore-db
 
@@ -101,7 +109,7 @@ commands:
       - run:
           name: Scan private image with anchore engine.
           command: |
-            anchore_ci_tools --setup
+            anchore_ci_tools --wait
             anchore-cli registry add << parameters.registry_name >> << parameters.registry_user >> << parameters.registry_pass >> --skip-validate
             anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
 
@@ -122,7 +130,7 @@ commands:
       - run:
           name: Analyze image with anchore engine.
           command: |
-            anchore_ci_tools --setup
+            anchore_ci_tools --wait
             anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
 
 jobs:
