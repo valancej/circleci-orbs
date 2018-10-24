@@ -73,7 +73,7 @@ commands:
     steps:
       - run:
           name: Analyze image with anchore engine.
-          command: anchore_ci_tools --analyze --report --image << paramenters.image_name >> --timeout << parameters.timeout >>
+          command: anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
 
   generate_reports:
     description: |
