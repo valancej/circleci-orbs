@@ -94,7 +94,7 @@ commands:
       - run:
           name: Add private registry to anchore engine.
           command: |
-            anchore_ci_tools --wait --timeout 30 || anchore_ci_tools --setup
+            anchore_ci_tools --wait
             anchore-cli registry add << parameters.registry_name >> << parameters.registry_user >> << parameters.registry_pass >> --skip-validate
 
   analyze_image:
@@ -114,7 +114,7 @@ commands:
       - run:
           name: Analyze image with anchore engine.
           command: |
-            anchore_ci_tools --wait --timeout 30 || anchore_ci_tools --setup
+            anchore_ci_tools --wait
             anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
 
   setup_engine:
@@ -124,7 +124,7 @@ commands:
     steps:
       - run:
           name: Setup anchore engine.
-          command: anchore_ci_tools --setup
+          command: anchore_ci_tools --setup &
 
 jobs:
   image_scan:
