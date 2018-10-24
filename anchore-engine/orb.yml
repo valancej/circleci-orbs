@@ -20,11 +20,18 @@ executors:
     docker:
       - image: anchore/engine-cli:latest
       - image: anchore/anchore-engine:<< parameters.tag >>
-        entrypoint: |
-          curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py;
-          chmod +x /tmp/anchore_ci_tools.py;
-          ln -s /tmp/anchore_ci_tools.py /usr/local/bin/anchore_ci_tools;
-          anchore_ci_tools --setup;
+        entrypoint:
+          - "mkdir"
+          - "/config"
+          - "&&"
+          - "curl"
+          - "-o"
+          - "/config/config.yaml"
+          - "https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/config.yaml"
+          - "&&"
+          - "anchore-manager"
+          - "service"
+          - "start"
         name: anchore-engine
       - image: anchore/engine-db-preload:<< parameters.tag >>
         name: anchore-db
@@ -64,7 +71,7 @@ commands:
       - run:
           name: Push local image to temp registry container.
           command: |
-            yum install -y docker
+            apk add docker
             docker tag << parameters.image_name >> anchore-registry:5000/<< parameters.image_name >>
             docker push anchore-registry:5000/<< parameters.image_name >>
 
@@ -79,7 +86,6 @@ commands:
             apk add curl
             curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py
             chmod +x /tmp/anchore_ci_tools.py
-            ln -s /tmp/anchore_ci_tools.py /usr/local/bin/anchore_ci_tools
 
   analyze_private_image:
     description: |
@@ -110,9 +116,9 @@ commands:
       - run:
           name: Scan private image with anchore engine.
           command: |
-            anchore_ci_tools --wait
+            python /tmp/anchore_ci_tools --wait
             anchore-cli registry add << parameters.registry_name >> << parameters.registry_user >> << parameters.registry_pass >> --skip-validate
-            anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
+            python /tmp/anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
 
   analyze_image:
     description: |
@@ -131,8 +137,8 @@ commands:
       - run:
           name: Analyze image with anchore engine.
           command: |
-            anchore_ci_tools --wait
-            anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
+            python /tmp/anchore_ci_tools --wait
+            python /tmp/anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
 
 jobs:
   image_scan:
