@@ -114,7 +114,7 @@ commands:
       - run:
           name: Analyze image with anchore engine.
           command: |
-            anchore_ci_tools --setup
+            anchore_ci_tools --setup || true
             anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
 
   setup_engine:
