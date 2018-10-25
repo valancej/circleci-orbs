@@ -96,6 +96,14 @@ commands:
         description: Timeout used for Anchore Engine image scanning.
     steps:
       - run:
+          name: Install anchore CI tools
+          command: |
+            pip install --upgrade pip
+            pip install anchorecli
+            curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py
+            chmod +x /tmp/anchore_ci_tools.py
+            ln -s /tmp/anchore_ci_tools.py /home/circleci/bin/anchore_ci_tools
+      - run:
           name: Setup anchore engine.
           command: |
             curl -o docker-compose.yaml https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/docker-compose.yaml
