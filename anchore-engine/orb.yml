@@ -121,11 +121,11 @@ commands:
     description: Prints analysis report of package vulnerabilites.
     steps:
       - run:
-          name: Parse image analysis reports with jq.
+          name: View parsed vulnerability analysis report.
           command: |
-            printf "\n%s\n" "The following OS packages are installed on ${IMAGE_NAME}:"
+            printf "\n%s\n" "The following OS packages are installed:"
             jq '[.content | sort_by(.package) | .[] | {package: .package, version: .version}]' anchore-reports/image-content-os-report.json || true
-            printf "\n%s\n" "The following vulnerabilites were found on ${IMAGE_NAME}:"
+            printf "\n%s\n" "The following vulnerabilites were found:"
             jq '[.vulnerabilities | group_by(.package) | .[] | {package: .[0].package, vuln: [.[].vuln]}]' anchore-reports/image-vuln-report.json || true
 
   setup_anchore_engine:
