@@ -23,7 +23,9 @@ commands:
             ln -s /tmp/anchore_ci_tools.py /home/circleci/bin/anchore_ci_tools
       - run:
           name: install anchore-cli
-          command: pip install anchore-cli
+          command: |
+            pip install --upgrade pip
+            pip install anchorecli
 
   add_private_registry:
     description: |
@@ -75,7 +77,7 @@ commands:
     steps:
       - run:
           name: Install docker-compose
-          command: pip install docker-compose
+          command: pip install --upgrade docker-compose
       - run:
           name: Start anchore engine.
           command: |
