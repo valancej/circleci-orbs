@@ -11,19 +11,6 @@ executors:
     machine: true
 
 commands:
-  install_tools:
-    description: |
-      Install anchore_ci_tools.py & anchorecli.
-    steps:
-      - run:
-          name: Install anchore tools
-          command: |
-            pip install --upgrade pip
-            pip install anchorecli
-            curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py
-            chmod +x /tmp/anchore_ci_tools.py
-            ln -s /tmp/anchore_ci_tools.py /home/circleci/bin/anchore_ci_tools
-
   add_private_registry:
     description: |
       Adds credentials for private registries to anchore engine.
@@ -47,6 +34,56 @@ commands:
           name: Add private registry credentials to anchore engine.
           command: anchore-cli registry add << parameters.registry_name >> << parameters.registry_user >> << parameters.registry_pass >> --skip-validate
 
+  analyze_local_image:
+    description: |
+      Pushes a local image to a temporary registry container.
+      Image is then scaned with anchore engine. Stores all reports as artifacts.
+      Must be run on executor with docker-compose & sudo.
+    parameters:
+      analysis_fail:
+        description: Set to True if pipeline should stop on a failed image analysis.
+        type: boolean
+        default: False
+      image_name:
+        description: Image repository & tag (eg - "anchore/anchore-engine:latest").
+        type: string
+      timeout:
+        description: Timeout used for Anchore Engine image scanning.
+        type: string
+        default: "300"
+    steps:
+      - install_tools
+      - setup_anchore_engine
+      - run:
+          name: Start up local registry.
+          command: |
+            cat \<< EOF \>> docker-compose.yaml
+
+              anchore-registry:
+                image: "registry:latest"
+                ports:
+                - "5000:5000"
+            EOF
+            docker-compose up -d
+            echo "127.0.0.1 anchore-registry" | sudo tee -a /etc/hosts > /dev/null
+      - run:
+          name: Push local image to temporary registry container.
+          command: |
+            docker tag << parameters.image_name >> anchore-registry:5000/<< parameters.image_name >>
+            docker push anchore-registry:5000/<< parameters.image_name >>
+      - analyze_image:
+          image_name: anchore-registry:5000/<< parameters.image_name >>
+          timeout: << parameters.timeout >>
+      - when:
+          condition: << parameters.analysis_fail >>
+          steps:
+            - run:
+                name: Check status of image analysis.
+                command: anchore-cli evaluate check << parameters.image_name >>
+      - parse_reports
+      - store_artifacts:
+          path: anchore-reports
+
   analyze_image:
     description: |
       Add image to anchore engine and start analyzing.
@@ -64,6 +101,30 @@ commands:
       - run:
           name: Analyze image with anchore engine.
           command: anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
+
+  install_tools:
+    description: |
+      Install anchore_ci_tools.py & anchorecli.
+    steps:
+      - run:
+          name: Install anchore tools
+          command: |
+            pip install --upgrade pip
+            pip install anchorecli
+            curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py
+            chmod +x /tmp/anchore_ci_tools.py
+            ln -s /tmp/anchore_ci_tools.py /home/circleci/bin/anchore_ci_tools
+
+  parse_reports:
+    description: Prints analysis report of package vulnerabilites.
+    steps:
+      - run:
+          name: Parse image analysis reports with jq.
+          command: |
+            printf "\n%s\n" "The following OS packages are installed on ${IMAGE_NAME}:"
+            jq '[.content | sort_by(.package) | .[] | {package: .package, version: .version}]' anchore-reports/image-content-os-report.json || true
+            printf "\n%s\n" "The following vulnerabilites were found on ${IMAGE_NAME}:"
+            jq '[.vulnerabilities | group_by(.package) | .[] | {package: .[0].package, vuln: [.[].vuln]}]' anchore-reports/image-vuln-report.json || true
 
   setup_anchore_engine:
     description: |
@@ -83,60 +144,6 @@ commands:
             docker-compose up -d
             printf "\n%s\n" "Waiting for anchore engine to start..."
             anchore_ci_tools --wait
-
-  analyze_local_image:
-    description: |
-      Pushes a local image to a temporary registry container.
-      Image is then scaned with anchore engine. Stores all reports as artifacts.
-    parameters:
-      analysis_fail:
-        description: Set to True if pipeline should stop on a failed image analysis.
-        type: boolean
-        default: False
-      image_name:
-        description: Image repository & tag (eg - "anchore/anchore-engine:latest").
-        type: string
-      timeout:
-        description: Timeout used for Anchore Engine image scanning.
-        type: string
-        default: "300"
-    steps:
-      - install_tools
-      - run:
-          name: Setup anchore engine.
-          command: |
-            pip install --upgrade docker-compose
-            curl -o docker-compose.yaml https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/docker-compose.yaml
-            sed -i 's|postgres:9|anchore/engine-db-preload:latest|' docker-compose.yaml
-            cat \<< EOF \>> docker-compose.yaml
-
-              anchore-registry:
-                image: "registry:latest"
-                ports:
-                - "5000:5000"
-            EOF
-            mkdir config db
-            curl -o config/config.yaml https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/config.yaml
-            docker-compose up -d
-            printf "\n%s\n" "Waiting for anchore engine to start..."
-            anchore_ci_tools --wait
-      - run:
-          name: Push local image to temporary registry container.
-          command: |
-            echo "127.0.0.1 anchore-registry" | sudo tee -a /etc/hosts > /dev/null
-            docker tag << parameters.image_name >> anchore-registry:5000/<< parameters.image_name >>
-            docker push anchore-registry:5000/<< parameters.image_name >>
-      - analyze_image:
-          image_name: anchore-registry:5000/<< parameters.image_name >>
-          timeout: << parameters.timeout >>
-      - when:
-          condition: << parameters.analysis_fail >>
-          steps:
-            - run:
-                name: Check status of image analysis.
-                command: anchore-cli evaluate check << parameters.image_name >>
-      - store_artifacts:
-          path: anchore-reports
 
 jobs:
   image_scan:
@@ -182,5 +189,6 @@ jobs:
       - analyze_image:
           image_name: << parameters.image_name >>
           timeout: << parameters.timeout >>
+      - parse_reports
       - store_artifacts:
           path: anchore-reports
