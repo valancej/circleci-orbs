@@ -20,7 +20,7 @@ commands:
           command: |
             curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py
             chmod +x /tmp/anchore_ci_tools.py
-            ln -s /tmp/anchore_ci_tools.py /usr/local/bin/anchore_ci_tools
+            ln -s /tmp/anchore_ci_tools.py /home/circleci/bin/anchore_ci_tools
       - run:
           name: install anchore-cli
           command: pip install anchore-cli
