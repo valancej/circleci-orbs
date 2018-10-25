@@ -82,7 +82,7 @@ commands:
           name: Start anchore engine.
           command: |
             curl -o docker-compose.yaml https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/docker-compose.yaml
-            sed -i 's|postgres:9|anchore/engine-db-preload:latest|'
+            sed -i 's|postgres:9|anchore/engine-db-preload:latest|' docker-compose.yaml
             mkdir config db
             curl -o config/config.yaml https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/config.yaml
             docker-compose up -d
