@@ -16,22 +16,19 @@ commands:
       Must be used on executor with anchore-cli installed.
     steps:
       - run:
-          name: Install anchore_ci_tools.py
-          command: |
-            curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py
-            chmod +x /tmp/anchore_ci_tools.py
-            ln -s /tmp/anchore_ci_tools.py /home/circleci/bin/anchore_ci_tools
-      - run:
-          name: install anchore-cli
+          name: Install anchore CI tools
           command: |
             pip install --upgrade pip
             pip install anchorecli
+            curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py
+            chmod +x /tmp/anchore_ci_tools.py
+            ln -s /tmp/anchore_ci_tools.py /home/circleci/bin/anchore_ci_tools
 
   add_private_registry:
     description: |
-      Used for analyzing image in a private registry.
+      Adds credentials for private registries to anchore engine.
       All parameters are required if using this command.
-      Must run on executor with anchore-engine installed.
+      Must run on executor with anchore-engine running & anchore-cli installed.
     parameters:
       registry_name:
         description: Name of private registry.
@@ -47,10 +44,8 @@ commands:
         default: "mysecretpassword"
     steps:
       - run:
-          name: Scan private image with anchore engine.
-          command: |
-            anchore_ci_tools --wait
-            anchore-cli registry add << parameters.registry_name >> << parameters.registry_user >> << parameters.registry_pass >> --skip-validate
+          name: Add private registry creds to anchore engine.
+          command: anchore-cli registry add << parameters.registry_name >> << parameters.registry_user >> << parameters.registry_pass >> --skip-validate
 
   analyze_image:
     description: |
@@ -68,9 +63,7 @@ commands:
     steps:
       - run:
           name: Analyze image with anchore engine.
-          command: |
-            anchore_ci_tools --wait
-            anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
+          command: anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
 
   setup_anchore_engine:
     description: Setup anchore-engine with docker compose
@@ -86,6 +79,25 @@ commands:
             mkdir config db
             curl -o config/config.yaml https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/config.yaml
             docker-compose up -d
+            anchore_ci_tools --wait
+
+  push_local_image:
+    description: |
+      Due to the functionality of anchore engine, images must be pulled from a
+      registry. This command pushes a local image to a temporary registry container.
+    parameters:
+      image_name:
+        description: Image repository & tag.
+        type: string
+    steps:
+      - run:
+          name: Setup local docker registry
+          command: docker run -d --name=anchore-registry -p 5000:5000 registry:latest
+      - run:
+          name: Push local image to temp registry container.
+          command: |
+            docker tag << parameters.image_name >> anchore-registry:5000/<< parameters.image_name >>
+            docker push anchore-registry:5000/<< parameters.image_name >>
 
 jobs:
   image_scan:
@@ -97,6 +109,10 @@ jobs:
     parameters:
       private_registry:
         description: Set to True if image is only accessible from a private registry.
+        default: False
+        type: boolean
+      local_image:
+        description: Set to True if scanning local image (not pulled from a registry).
         default: False
         type: boolean
       registry_name:
@@ -128,8 +144,19 @@ jobs:
                 registry_name: << parameters.registry_name >>
                 registry_user: << parameters.registry_user >>
                 registry_pass: << parameters.registry_pass >>
-      - analyze_image:
-          image_name: << parameters.image_name >>
-          timeout: << parameters.timeout >>
+      - when:
+          condition: << parameters.local_image >>
+          steps:
+            - push_local_image:
+                image_name: << parameters.image_name >>
+            - analyze_image:
+                image_name: anchore-registry:5000/<< parameters.image_name >>
+                timeout: << parameters.timeout >>
+      - unless:
+          condition: << parameters.local_image >>
+          steps:
+            - analyze_image:
+                image_name: << parameters.image_name >>
+                timeout: << parameters.timeout >>
       - store_artifacts:
           path: anchore-reports
