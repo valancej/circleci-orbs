@@ -23,7 +23,7 @@ jobs:
             - caches/*
 
   local_image_scan:
-    executor: anchore_engine
+    executor: anchore/anchore_engine
     steps:
       - attach_workspace:
           at: /home/circleci/workspace/
