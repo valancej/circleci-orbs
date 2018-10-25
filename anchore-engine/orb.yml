@@ -49,7 +49,7 @@ commands:
       - run:
           name: Scan private image with anchore engine.
           command: |
-            anchore_ci_tools.py --wait
+            anchore_ci_tools --wait
             anchore-cli registry add << parameters.registry_name >> << parameters.registry_user >> << parameters.registry_pass >> --skip-validate
 
   analyze_image:
@@ -120,6 +120,7 @@ jobs:
         description: Timeout used for Anchore Engine image scanning.
     steps:
       - install_ci_tools
+      - setup_anchore_engine
       - when:
           condition: << parameters.private_registry >>
           steps:
