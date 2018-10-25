@@ -3,78 +3,13 @@ description: anchore engine container security scanning
 
 executors:
   anchore_engine:
-    description: |
-      The anchore-engine image, useful for stateless image scanning.
-      Image includes anchore-cli for interacting with the engine.
-      Includes postgresql image preloaded with anchore vulnerability data.
-    parameters:
-      tag:
-        type: string
-        default: "v0.2.4"
     environment:
       ANCHORE_CLI_USER: "admin"
       ANCHORE_CLI_PASS: "foobar"
       ANCHORE_CLI_SSL_VERIFY: "n"
-      ANCHORE_ENDPOINT_HOSTNAME: "anchore-engine"
-      ANCHORE_HOST_ID: "localhost"
-    docker:
-      - image: anchore/engine-cli:latest
-      - image: anchore/anchore-engine:<< parameters.tag >>
-        entrypoint:
-          - "mkdir"
-          - "/config"
-          - "&&"
-          - "curl"
-          - "-o"
-          - "/config/config.yaml"
-          - "https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/config.yaml"
-          - "&&"
-          - "anchore-manager"
-          - "service"
-          - "start"
-        name: anchore-engine
-      - image: anchore/engine-db-preload:<< parameters.tag >>
-        name: anchore-db
-
-  anchore_engine_registry:
-    description: |
-      The anchore-engine image, useful for stateless image scanning.
-      Image includes anchore-cli for interacting with the engine.
-      Includes postgresql image preloaded with anchore vulnerability data.
-      Includes dockerhub registry image to temporarily store local image.
-    parameters:
-      tag:
-        type: string
-        default: "v0.2.4"
-    environment:
-      ANCHORE_CLI_USER: "admin"
-      ANCHORE_CLI_PASS: "foobar"
-      ANCHORE_CLI_SSL_VERIFY: "n"
-    docker:
-      - image: anchore/anchore-engine:<< parameters.tag >>
-        entrypoint: ""
-      - image: anchore/engine-db-preload:<< parameters.tag >>
-        name: anchore-db
-      - image: registry:latest
-        name: anchore-registry
+    machine: true
 
 commands:
-  push_local_image:
-    description: |
-      Due to the functionality of anchore engine, images must be pulled from a
-      registry. This command pushes a local image to a temporary registry container.
-    parameters:
-      image_name:
-        description: Image repository & tag.
-        type: string
-    steps:
-      - run:
-          name: Push local image to temp registry container.
-          command: |
-            apk add docker
-            docker tag << parameters.image_name >> anchore-registry:5000/<< parameters.image_name >>
-            docker push anchore-registry:5000/<< parameters.image_name >>
-
   install_ci_tools:
     description: |
       Downloads anchore_ci_tools.py and create symbolic link.
@@ -83,19 +18,19 @@ commands:
       - run:
           name: Install anchore_ci_tools.py
           command: |
-            apk add curl
             curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py
             chmod +x /tmp/anchore_ci_tools.py
+            ln -s /tmp/anchore_ci_tools.py /usr/local/bin/anchore_ci_tools
+      - run:
+          name: install anchore-cli
+          command: pip install anchore-cli
 
-  analyze_private_image:
+  add_private_registry:
     description: |
       Used for analyzing image in a private registry.
       All parameters are required if using this command.
       Must run on executor with anchore-engine installed.
     parameters:
-      image_name:
-        type: string
-        description: Image repository & tag.
       registry_name:
         description: Name of private registry.
         type: string
@@ -108,17 +43,12 @@ commands:
         description: Password for private registry (use env var to populate).
         type: string
         default: "mysecretpassword"
-      timeout:
-        type: string
-        default: "300"
-        description: Timeout used for Anchore Engine image scanning.
     steps:
       - run:
           name: Scan private image with anchore engine.
           command: |
-            python /tmp/anchore_ci_tools --wait
+            anchore_ci_tools.py --wait
             anchore-cli registry add << parameters.registry_name >> << parameters.registry_user >> << parameters.registry_pass >> --skip-validate
-            python /tmp/anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
 
   analyze_image:
     description: |
@@ -137,8 +67,23 @@ commands:
       - run:
           name: Analyze image with anchore engine.
           command: |
-            python /tmp/anchore_ci_tools --wait
-            python /tmp/anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
+            anchore_ci_tools --wait
+            anchore_ci_tools --analyze --report --image << parameters.image_name >> --timeout << parameters.timeout >>
+
+  setup_anchore_engine:
+    description: Setup anchore-engine with docker compose
+    steps:
+      - run:
+          name: Install docker-compose
+          command: pip install docker-compose
+      - run:
+          name: Start anchore engine.
+          command: |
+            curl -o docker-compose.yaml https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/docker-compose.yaml
+            sed -i 's|postgres:9|anchore/engine-db-preload:latest'
+            mkdir config db
+            curl -o config/config.yaml https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/config.yaml
+            docker-compose up -d
 
 jobs:
   image_scan:
@@ -176,39 +121,12 @@ jobs:
       - when:
           condition: << parameters.private_registry >>
           steps:
-            - analyze_private_image:
-                image_name: << parameters.image_name >>
+            - add_private_registry:
                 registry_name: << parameters.registry_name >>
                 registry_user: << parameters.registry_user >>
                 registry_pass: << parameters.registry_pass >>
-      - unless:
-          condition: << parameters.private_registry >>
-          steps:
-            - analyze_image:
-                image_name: << parameters.image_name >>
-                timeout: << parameters.timeout >>
-      - store_artifacts:
-          path: anchore-reports
-
-  local_image_scan:
-    executor: anchore_engine_registry
-    description: |
-      Performs a static security analysis of docker image with anchore engine.
-      Pushes local image to temp registry to be pulled by anchore engine.
-    parameters:
-      image_name:
-        type: string
-        description: Image repository & tag.
-      timeout:
-        type: string
-        default: "300"
-        description: Timeout used for Anchore Engine image scanning.
-    steps:
-      - install_ci_tools
-      - push_local_image:
-          image_name: << parameters.image_name >>
       - analyze_image:
-          image_name: anchore-registry:5000/<< parameters.image_name >>
+          image_name: << parameters.image_name >>
           timeout: << parameters.timeout >>
       - store_artifacts:
           path: anchore-reports
