@@ -54,12 +54,12 @@ commands:
       Must run on executor with anchore_ci_tools.py installed.
     parameters:
       image_name:
-        type: string
         description: Image repository & tag.
+        type: string
       timeout:
+        description: Timeout used for Anchore Engine image scanning.
         type: string
         default: "300"
-        description: Timeout used for Anchore Engine image scanning.
     steps:
       - run:
           name: Analyze image with anchore engine.
@@ -79,9 +79,10 @@ commands:
             mkdir config db
             curl -o config/config.yaml https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/config.yaml
             docker-compose up -d
+            printf "\n%s\n" "Waiting for anchore engine to start..."
             anchore_ci_tools --wait
 
-  push_local_image:
+  analyze_local_image:
     description: |
       Due to the functionality of anchore engine, images must be pulled from a
       registry. This command pushes a local image to a temporary registry container.
@@ -91,13 +92,31 @@ commands:
         type: string
     steps:
       - run:
-          name: Setup local docker registry
-          command: docker run -d --name=anchore-registry -p 5000:5000 registry:latest
+          name: Setup anchore engine.
+          command: |
+            curl -o docker-compose.yaml https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/docker-compose.yaml
+            sed -i 's|postgres:9|anchore/engine-db-preload:latest|' docker-compose.yaml
+            cat << EOF >> docker-compose.yaml
+
+              anchore-registry:
+                image: "registry:latest"
+                ports:
+                - "5000:5000"
+            EOF
+            mkdir config db
+            curl -o config/config.yaml https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/config.yaml
+            docker-compose up -d
+            printf "\n%s\n" "Waiting for anchore engine to start..."
+            anchore_ci_tools --wait
       - run:
           name: Push local image to temp registry container.
           command: |
+            echo "127.0.0.1 anchore-registry" | sudo tee -a /etc/hosts > /dev/null
             docker tag << parameters.image_name >> anchore-registry:5000/<< parameters.image_name >>
             docker push anchore-registry:5000/<< parameters.image_name >>
+      - run:
+          name: Analyze image with anchore engine.
+          command: anchore_ci_tools --analyze --report --image anchore-registry:5000/<< parameters.image_name >> --timeout << parameters.timeout >>
 
 jobs:
   image_scan:
@@ -109,12 +128,8 @@ jobs:
     parameters:
       private_registry:
         description: Set to True if image is only accessible from a private registry.
-        default: False
         type: boolean
-      local_image:
-        description: Set to True if scanning local image (not pulled from a registry).
         default: False
-        type: boolean
       registry_name:
         description: Name of private registry (eg - docker.io)
         type: string
@@ -144,19 +159,8 @@ jobs:
                 registry_name: << parameters.registry_name >>
                 registry_user: << parameters.registry_user >>
                 registry_pass: << parameters.registry_pass >>
-      - when:
-          condition: << parameters.local_image >>
-          steps:
-            - push_local_image:
-                image_name: << parameters.image_name >>
-            - analyze_image:
-                image_name: anchore-registry:5000/<< parameters.image_name >>
-                timeout: << parameters.timeout >>
-      - unless:
-          condition: << parameters.local_image >>
-          steps:
-            - analyze_image:
-                image_name: << parameters.image_name >>
-                timeout: << parameters.timeout >>
+      - analyze_image:
+          image_name: << parameters.image_name >>
+          timeout: << parameters.timeout >>
       - store_artifacts:
           path: anchore-reports
