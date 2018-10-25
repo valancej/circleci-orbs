@@ -34,7 +34,7 @@ jobs:
           command: |
             docker load -i /home/circleci/workspace/caches/${CIRCLE_PROJECT_REPONAME}-ci.tar || true
       - anchore/analyze_local_image:
-          image_name: ${CIRCLE_PROJECT_REPONAME}
+          image_name: ${CIRCLE_PROJECT_REPONAME}:ci
 
 workflows:
   scan_image:
