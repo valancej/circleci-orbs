@@ -55,7 +55,7 @@ commands:
       - install_tools
       - setup_anchore_engine
       - run:
-          name: Start up local registry.
+          name: Start registry container & push local image.
           command: |
             cat \<< EOF \>> docker-compose.yaml
 
@@ -68,9 +68,6 @@ commands:
             echo "127.0.0.1 anchore-registry" | sudo tee -a /etc/hosts > /dev/null
             echo "Waiting for registry to start..."
             sleep 15
-      - run:
-          name: Push local image to temporary registry container.
-          command: |
             docker tag << parameters.image_name >> anchore-registry:5000/<< parameters.image_name >>
             docker push anchore-registry:5000/<< parameters.image_name >>
       - analyze_image:
@@ -134,11 +131,9 @@ commands:
       Must be run on executor with anchore_ci_tools.py & anchorecli installed.
     steps:
       - run:
-          name: Install docker-compose
-          command: pip install --upgrade docker-compose
-      - run:
           name: Start anchore engine.
           command: |
+            pip install --upgrade docker-compose
             curl -o docker-compose.yaml https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/docker-compose.yaml
             sed -i 's|postgres:9|anchore/engine-db-preload:latest|' docker-compose.yaml
             mkdir config db
