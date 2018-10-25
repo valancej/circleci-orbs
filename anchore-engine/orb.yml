@@ -90,13 +90,17 @@ commands:
       image_name:
         description: Image repository & tag.
         type: string
+      timeout:
+        type: string
+        default: "300"
+        description: Timeout used for Anchore Engine image scanning.
     steps:
       - run:
           name: Setup anchore engine.
           command: |
             curl -o docker-compose.yaml https://raw.githubusercontent.com/anchore/anchore-engine/master/scripts/docker-compose/docker-compose.yaml
             sed -i 's|postgres:9|anchore/engine-db-preload:latest|' docker-compose.yaml
-            cat << EOF >> docker-compose.yaml
+            cat \<< EOF \>> docker-compose.yaml
 
               anchore-registry:
                 image: "registry:latest"

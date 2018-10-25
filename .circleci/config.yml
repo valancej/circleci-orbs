@@ -10,7 +10,7 @@ jobs:
       - run:
           name: build Docker image
           command: |
-            docker build -t ${IMAGE_NAME}:ci .
+            docker build -t ${CIRCLE_PROJECT_REPONAME}:ci .
       - run:
           name: Save Docker image
           command: |
