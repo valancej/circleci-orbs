@@ -65,10 +65,12 @@ commands:
                 - "5000:5000"
             EOF
             docker-compose up -d
+            echo "127.0.0.1 anchore-registry" | sudo tee -a /etc/hosts > /dev/null
+            echo "Waiting for registry to start..."
+            sleep 15
       - run:
           name: Push local image to temporary registry container.
           command: |
-            echo "127.0.0.1 anchore-registry" | sudo tee -a /etc/hosts > /dev/null
             docker tag << parameters.image_name >> anchore-registry:5000/<< parameters.image_name >>
             docker push anchore-registry:5000/<< parameters.image_name >>
       - analyze_image:
@@ -110,7 +112,7 @@ commands:
           name: Install anchore tools
           command: |
             pip install --upgrade pip
-            pip install anchorecli
+            pip install --upgrade anchorecli
             curl -o /tmp/anchore_ci_tools.py https://raw.githubusercontent.com/anchore/ci-tools/master/scripts/anchore_ci_tools.py
             chmod +x /tmp/anchore_ci_tools.py
             ln -s /tmp/anchore_ci_tools.py /home/circleci/bin/anchore_ci_tools
